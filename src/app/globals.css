@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
+/* `light:` utilities apply when the light theme is active (explicitly, or via system preference). */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+/*
+ * Design tokens. Dark is the base theme; light overrides it via [data-theme="light"] (set before
+ * first paint by the script in layout.tsx), or via the system preference when JS is unavailable.
+ */
 :root {
+  color-scheme: dark;
   --ink: #0a0b0c;
   --graphite: #111214;
   --graphite-2: #17181b;
@@ -12,6 +20,97 @@
   --faint: #6b6f76;
   --silver: #c9cdd3;
   --paper: #f3f3f1;
+  /* Overlay tint: UI washes are this colour at low opacity (white on dark, near-black on light). */
+  --tint: #ffffff;
+  /* 3D viewer stage and thumbnail wells */
+  --stage-from: #1d1f23;
+  --stage-to: #0b0c0e;
+  --well-from: #26282d;
+  --well-to: #121316;
+  /* Atmosphere */
+  --grid: rgba(255, 255, 255, 0.035);
+  --grid-fine: rgba(255, 255, 255, 0.018);
+  --band-from: rgba(17, 18, 20, 0.6);
+  --band-to: rgba(17, 18, 20, 0.4);
+  --vignette: rgba(5, 6, 7, 0.75);
+  --glow: rgba(201, 205, 211, 0.1);
+  --ambient-1: rgba(190, 198, 210, 0.09);
+  --ambient-2: rgba(150, 160, 175, 0.06);
+  --ambient-3: rgba(200, 205, 212, 0.05);
+  /* r,g,b used by the background canvas for particles and wireframes */
+  --particle-rgb: 215, 220, 226;
+}
+
+/* Light theme (keep both blocks in sync) */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: #f3f3f0;
+  --graphite: #ebebe7;
+  --graphite-2: #e4e4df;
+  --steel: #d5d5cf;
+  --line: rgba(14, 16, 18, 0.1);
+  --line-strong: rgba(14, 16, 18, 0.2);
+  --fg: #111214;
+  --muted: #4c5056;
+  --faint: #6c7076;
+  --silver: #2f3338;
+  --paper: #ffffff;
+  --tint: #0a0b0c;
+  --stage-from: #ffffff;
+  --stage-to: #e3e3de;
+  --well-from: #ffffff;
+  --well-to: #e2e2dd;
+  --grid: rgba(14, 16, 18, 0.05);
+  --grid-fine: rgba(14, 16, 18, 0.025);
+  --band-from: rgba(255, 255, 255, 0.6);
+  --band-to: rgba(255, 255, 255, 0.35);
+  --vignette: rgba(225, 225, 220, 0.6);
+  --glow: rgba(255, 255, 255, 0.7);
+  --ambient-1: rgba(255, 255, 255, 0.9);
+  --ambient-2: rgba(200, 204, 210, 0.35);
+  --ambient-3: rgba(255, 255, 255, 0.6);
+  --particle-rgb: 40, 44, 50;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --ink: #f3f3f0;
+    --graphite: #ebebe7;
+    --graphite-2: #e4e4df;
+    --steel: #d5d5cf;
+    --line: rgba(14, 16, 18, 0.1);
+    --line-strong: rgba(14, 16, 18, 0.2);
+    --fg: #111214;
+    --muted: #4c5056;
+    --faint: #6c7076;
+    --silver: #2f3338;
+    --paper: #ffffff;
+    --tint: #0a0b0c;
+    --stage-from: #ffffff;
+    --stage-to: #e3e3de;
+    --well-from: #ffffff;
+    --well-to: #e2e2dd;
+    --grid: rgba(14, 16, 18, 0.05);
+    --grid-fine: rgba(14, 16, 18, 0.025);
+    --band-from: rgba(255, 255, 255, 0.6);
+    --band-to: rgba(255, 255, 255, 0.35);
+    --vignette: rgba(225, 225, 220, 0.6);
+    --glow: rgba(255, 255, 255, 0.7);
+    --ambient-1: rgba(255, 255, 255, 0.9);
+    --ambient-2: rgba(200, 204, 210, 0.35);
+    --ambient-3: rgba(255, 255, 255, 0.6);
+    --particle-rgb: 40, 44, 50;
+  }
+}
+
+/* Brief cross-fade while switching themes (class added by the toggle for ~400ms). */
+html.theme-switching,
+html.theme-switching * {
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease,
+    fill 0.35s ease !important;
 }
 
 @theme inline {
@@ -26,19 +125,21 @@
   --color-faint: var(--faint);
   --color-silver: var(--silver);
   --color-paper: var(--paper);
+  --color-tint: var(--tint);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 html {
-  scroll-behavior: smooth;
+  /* In-page links are animated by AnchorScroll; keep native jumps instant so the two never fight. */
+  scroll-behavior: auto;
   scroll-padding-top: 4.5rem;
   background: var(--ink);
-  color-scheme: dark;
 }
 
 body {
-  background: var(--ink);
+  /* Transparent so the fixed AmbientBackground layer (z-index -10) shows through. */
+  background: transparent;
   color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
   font-feature-settings: "ss01", "cv11";
@@ -83,16 +184,62 @@ body {
     @apply bg-fg text-ink hover:bg-silver;
   }
   .btn-ghost {
-    @apply border border-line-strong text-fg hover:border-fg hover:bg-white/5;
+    @apply border border-line-strong text-fg hover:border-fg hover:bg-tint/5;
   }
 }
 
 /* Subtle engineering grid used behind the hero and viewer */
 .blueprint-grid {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
   background-size: 64px 64px;
+}
+
+.blueprint-grid-fine {
+  background-image:
+    linear-gradient(to right, var(--grid-fine) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-fine) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Slow, low-contrast ambient light drifting behind everything */
+.ambient-light {
+  background:
+    radial-gradient(40% 35% at 72% 28%, var(--ambient-1), transparent 70%),
+    radial-gradient(35% 30% at 18% 72%, var(--ambient-2), transparent 70%),
+    radial-gradient(30% 25% at 50% 110%, var(--ambient-3), transparent 70%);
+  animation: ambient-drift 38s ease-in-out infinite alternate;
+}
+@keyframes ambient-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-3%, 2%, 0) scale(1.05); }
+  100% { transform: translate3d(2%, -2%, 0) scale(1.02); }
+}
+
+/* Translucent section band — keeps the atmosphere visible while separating content */
+.band {
+  background: linear-gradient(180deg, var(--band-from), var(--band-to));
+}
+
+/* Minimal range input (video seek / volume) */
+.range {
+  appearance: none;
+  cursor: pointer;
+  background: linear-gradient(to right, #fff var(--p, 0%), rgba(255, 255, 255, 0.25) var(--p, 0%));
+}
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+}
+.range::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
 }
 
 @keyframes scroll-cue {
@@ -103,9 +250,35 @@ body {
   animation: scroll-cue 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-/* Hero entrance elements start hidden only when JS (and therefore GSAP) is available. */
-@media (prefers-reduced-motion: no-preference) {
-  html.js .hero-anim {
+/* Hero entrance elements start hidden only when scripting (and therefore GSAP) is available. */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .hero-anim {
     visibility: hidden;
   }
+}
+
+/* Theme toggle icons: show the icon for the theme you'd switch TO. */
+.theme-icon-sun { display: block; }
+.theme-icon-moon { display: none; }
+:root[data-theme="light"] .theme-icon-sun { display: none; }
+:root[data-theme="light"] .theme-icon-moon { display: block; }
+
+/* Range input for viewer tools — follows the theme tokens */
+.range-tool {
+  appearance: none;
+  cursor: pointer;
+  background: linear-gradient(to right, var(--fg) var(--p, 0%), var(--line-strong) var(--p, 0%));
+}
+.range-tool::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  background: var(--fg);
+}
+.range-tool::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 0;
+  background: var(--fg);
 }

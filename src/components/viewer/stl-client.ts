@@ -27,7 +27,7 @@ function getWorker(): Worker | null {
       else {
         pending.delete(msg.id);
         if (msg.type === "error") entry.reject(new Error(msg.message));
-        else entry.resolve((msg.type === "done" ? msg.result : msg.edges) as never);
+        else entry.resolve(msg.result as never);
       }
     };
     worker.onerror = () => {
@@ -84,15 +84,30 @@ export function loadStl(url: string, events?: LoadEvents): Promise<ProcessedStl>
   return promise;
 }
 
-const edgeCache = new WeakMap<Float32Array, Promise<Float32Array>>();
+export type EdgeData = { edges: Float32Array; offsets: Float32Array };
+const edgeCache = new WeakMap<Float32Array, Promise<EdgeData>>();
+const explodeCache = new WeakMap<Float32Array, Promise<Float32Array>>();
 
-export function loadEdges(positions: Float32Array): Promise<Float32Array> {
+/** Feature edges (and their explode offsets) for the inspection overlay, computed off the main thread. */
+export function loadEdges(positions: Float32Array): Promise<EdgeData> {
   const cached = edgeCache.get(positions);
   if (cached) return cached;
   const w = getWorker();
   const promise = w
-    ? callWorker<Float32Array>(w, { type: "edges", positions: positions.slice() })
+    ? callWorker<EdgeData>(w, { type: "edges", positions: positions.slice() })
     : import("./stl-processing").then((m) => m.computeEdges(positions));
   edgeCache.set(positions, promise);
+  return promise;
+}
+
+/** Per-vertex explode offsets, computed on first use and cached per model. */
+export function loadExplode(positions: Float32Array): Promise<Float32Array> {
+  const cached = explodeCache.get(positions);
+  if (cached) return cached;
+  const w = getWorker();
+  const promise = w
+    ? callWorker<Float32Array>(w, { type: "explode", positions: positions.slice() })
+    : import("./stl-processing").then((m) => m.explodeOffsets(positions));
+  explodeCache.set(positions, promise);
   return promise;
 }

@@ -15,7 +15,7 @@ export function Contact({ formEnabled }: { formEnabled: boolean }) {
 
   return (
     <section id="contact" aria-labelledby="contact-title" className="container-x py-24 md:py-36">
-      <SectionHeading index="07" eyebrow="Contact" title={<span id="contact-title">Let’s build something precise.</span>}>
+      <SectionHeading index="08" eyebrow="Contact" title={<span id="contact-title">Let’s build something precise.</span>}>
         Recruiters, engineering teams and clients — I’d be glad to hear about suitable roles and projects.
       </SectionHeading>
 
@@ -32,6 +32,12 @@ export function Contact({ formEnabled }: { formEnabled: boolean }) {
           ) : (
             <Placeholder label="Email address (contact.email)" />
           )}
+          {contact.phone && (
+            <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-4 block text-[15px] text-muted hover:text-fg">
+              {contact.phone}
+            </a>
+          )}
+          {site.location && <p className="mt-1 font-mono text-[11px] tracking-[0.14em] text-faint uppercase">{site.location}</p>}
           {links.length > 0 && (
             <ul className="mt-6 space-y-2">
               {links.map((l) => (

@@ -3,9 +3,10 @@
 import { CameraControls, ContactShadows, Environment, Lightformer } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
-import { BufferAttribute, BufferGeometry, Euler, MathUtils, PerspectiveCamera, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Euler, Group, Material, MathUtils, Mesh, PerspectiveCamera, Vector3, type WebGLProgramParametersWithUniforms } from "three";
 import type CameraControlsImpl from "camera-controls";
-import { loadEdges } from "./stl-client";
+import { useTheme } from "@/lib/theme";
+import { loadEdges, loadExplode } from "./stl-client";
 import type { ProcessedStl } from "./stl-processing";
 import type { ViewName } from "@/content/models";
 
@@ -16,7 +17,31 @@ export type CameraApi = {
   reset: () => void;
   zoom: (direction: 1 | -1) => void;
   orbit: (azimuth: number, polar: number) => void;
+  /** Pull the camera back (or in) so an exploded model stays in frame. 0 = assembled. */
+  frameExplode: (amount: number) => void;
 };
+
+/** Shared, mutable explode value: animated in useFrame, read by the shader and the floor shadow. */
+export type ExplodeUniform = { value: number };
+
+/**
+ * Patches a built-in material so every vertex moves by `aExplode * uExplode`. aExplode holds each
+ * body's offset; uExplode animates 0 → 1. One draw call, no geometry rebuilds while animating.
+ */
+function useExplodePatch(uniform: ExplodeUniform) {
+  return useMemo(
+    () => ({
+      onBeforeCompile: (shader: WebGLProgramParametersWithUniforms) => {
+        shader.uniforms.uExplode = uniform;
+        shader.vertexShader = shader.vertexShader
+          .replace("#include <common>", "#include <common>\nattribute vec3 aExplode;\nuniform float uExplode;")
+          .replace("#include <begin_vertex>", "vec3 transformed = vec3( position ) + aExplode * uExplode;");
+      },
+      customProgramCacheKey: () => "explode",
+    }),
+    [uniform],
+  );
+}
 
 const VIEW_DIRECTIONS: Record<ViewName, [number, number, number]> = {
   front: [0, 0, 1],
@@ -59,24 +84,59 @@ export function StlMesh({
   data,
   mode = "solid",
   rotation,
+  explode = 0,
+  uniform,
   onEdgesLoading,
 }: {
   data: ProcessedStl;
   mode?: DisplayMode;
   rotation?: [number, number, number];
+  /** Target explode amount, 0 (assembled) → 1 (fully exploded). Animated smoothly. */
+  explode?: number;
+  /** Optional shared uniform, so siblings (e.g. the floor shadow) can follow the animation. */
+  uniform?: ExplodeUniform;
   onEdgesLoading?: (loading: boolean) => void;
 }) {
   const geometry = useStlGeometry(data);
+  const theme = useTheme();
   const [edges, setEdges] = useState<BufferGeometry | null>(null);
+  const ownUniform = useMemo<ExplodeUniform>(() => ({ value: 0 }), []);
+  const u = uniform ?? ownUniform;
+  const patch = useExplodePatch(u);
+  const [offsetsReady, setOffsetsReady] = useState(false);
+
+  // Explode offsets are computed in the worker the first time the model is exploded.
+  const wantOffsets = explode > 0 && data.bodies > 1;
+  useEffect(() => {
+    if (!wantOffsets || offsetsReady) return;
+    let active = true;
+    loadExplode(data.positions).then((offsets) => {
+      if (!active) return;
+      geometry.setAttribute("aExplode", new BufferAttribute(offsets, 3));
+      setOffsetsReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [wantOffsets, offsetsReady, data, geometry]);
+
+  // Three.js uniforms are mutable by design: they're updated every frame outside React's render cycle.
+  useFrame((_, dt) => {
+    const target = offsetsReady ? explode : 0;
+    const next = MathUtils.damp(u.value, target, 5, dt);
+    // eslint-disable-next-line react-hooks/immutability
+    u.value = Math.abs(next - target) < 1e-4 ? target : next;
+  });
 
   useEffect(() => {
     if (mode !== "inspect") return;
     let active = true;
     onEdgesLoading?.(true);
-    loadEdges(data.positions).then((positions) => {
+    loadEdges(data.positions).then(({ edges: positions, offsets }) => {
       if (!active) return;
       const g = new BufferGeometry();
       g.setAttribute("position", new BufferAttribute(positions, 3));
+      g.setAttribute("aExplode", new BufferAttribute(offsets, 3));
       setEdges(g);
       onEdgesLoading?.(false);
     });
@@ -88,13 +148,24 @@ export function StlMesh({
 
   useEffect(() => () => edges?.dispose(), [edges]);
 
+  // Materials recompile when the shader inputs change; key them so the patch applies cleanly.
+  const matKey = `${mode}-${theme}-${offsetsReady}`;
   return (
     <group rotation={rotation}>
-      <mesh geometry={geometry}>
+      <mesh geometry={geometry} frustumCulled={false}>
         {mode === "wireframe" ? (
-          <meshBasicMaterial color="#cfd3d9" wireframe transparent opacity={0.55} />
+          <meshBasicMaterial
+            key={matKey}
+            {...(offsetsReady ? patch : {})}
+            color={theme === "light" ? "#2f343a" : "#cfd3d9"}
+            wireframe
+            transparent
+            opacity={theme === "light" ? 0.6 : 0.55}
+          />
         ) : (
           <meshStandardMaterial
+            key={matKey}
+            {...(offsetsReady ? patch : {})}
             color={mode === "inspect" ? "#3b3f45" : "#b9bec5"}
             metalness={mode === "inspect" ? 0 : 0.45}
             roughness={mode === "inspect" ? 0.85 : 0.34}
@@ -106,8 +177,8 @@ export function StlMesh({
         )}
       </mesh>
       {mode === "inspect" && edges && (
-        <lineSegments geometry={edges}>
-          <lineBasicMaterial color="#f4f6f8" />
+        <lineSegments geometry={edges} frustumCulled={false}>
+          <lineBasicMaterial key={matKey} {...patch} color="#f4f6f8" />
         </lineSegments>
       )}
     </group>
@@ -126,10 +197,27 @@ export function floorY(data: ProcessedStl, rotation?: [number, number, number]) 
   return min;
 }
 
-/** Soft contact shadow under the model. Re-rendered once per model to keep the frame cost low. */
-export function Floor({ y }: { y: number }) {
+/**
+ * Soft contact shadow under the model. Re-rendered once per model to keep the frame cost low;
+ * it fades out while the model is exploded (the baked shadow only matches the assembled pose).
+ */
+export function Floor({ y, explode }: { y: number; explode?: ExplodeUniform }) {
+  const ref = useRef<Group>(null);
+  const materials = useRef<Material[]>([]);
+  useFrame(() => {
+    if (!explode || !ref.current) return;
+    if (!materials.current.length) {
+      ref.current.traverse((o) => {
+        if ((o as Mesh).isMesh) materials.current.push((o as Mesh).material as Material);
+      });
+    }
+    const opacity = 0.55 * Math.max(0, 1 - explode.value * 2.5);
+    for (const m of materials.current) m.opacity = opacity;
+    ref.current.visible = opacity > 0.01;
+  });
   return (
     <ContactShadows
+      ref={ref}
       position={[0, y - 0.004, 0]}
       opacity={0.55}
       scale={5}
@@ -157,11 +245,14 @@ export function CameraRig({
   autoRotate,
   initialView = "iso",
   speed = 0.35,
+  resetKey,
 }: {
   apiRef?: Ref<CameraApi>;
   autoRotate: boolean;
   initialView?: ViewName;
   speed?: number;
+  /** Changing this re-frames the camera with a smooth move (e.g. when a new model is loaded). */
+  resetKey?: string;
 }) {
   const controls = useRef<CameraControlsImpl>(null);
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
@@ -190,13 +281,25 @@ export function CameraRig({
       controls.current?.rotate(az, polar, true);
       lastInteraction.current = performance.now();
     },
+    frameExplode: (amount) => {
+      controls.current?.dollyTo(fitDistance(camera) * (1 + 0.8 * amount), true);
+      lastInteraction.current = performance.now();
+    },
   }));
 
   // Frame the model on mount and whenever the canvas aspect changes substantially.
   useEffect(() => {
     setView(initialView, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialView, size.width > size.height]);
+  }, [size.width > size.height]);
+
+  // Glide to the new model's starting view when the model changes.
+  const firstKey = useRef(resetKey);
+  useEffect(() => {
+    if (resetKey === firstKey.current) return;
+    setView(initialView, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
 
   useFrame((_, delta) => {
     const c = controls.current;

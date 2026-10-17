@@ -2,13 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { Gallery } from "@/components/Gallery";
+import { Carousel } from "@/components/Carousel";
+import { VideoPlayer } from "@/components/sections/VideoShowcase";
+import { CinematicReveal } from "@/components/ui/CinematicReveal";
 import { Placeholder } from "@/components/ui/Placeholder";
 import { Reveal } from "@/components/ui/Reveal";
 import { LazyViewer } from "@/components/viewer/LazyViewer";
 import { projectCover } from "@/components/sections/SelectedWorks";
 import { modelsForProject } from "@/content/models";
 import { getProject, projects } from "@/content/projects";
+import { site } from "@/content/site";
+import { availableVideos } from "@/lib/assets";
 import { showPlaceholders } from "@/lib/placeholders";
 
 export const dynamicParams = false;
@@ -39,9 +43,16 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
   const idx = projects.indexOf(project);
   const next = projects[(idx + 1) % projects.length];
   const models = modelsForProject(project.slug);
+  const videos = availableVideos(site.videos, project.slug);
 
   const tools = project.tools?.join(", ") ?? null;
-  const media = `${project.images.length} images${models.length ? ` · ${models.length} 3D model${models.length > 1 ? "s" : ""}` : ""}`;
+  const media = [
+    `${project.images.length} image${project.images.length === 1 ? "" : "s"}`,
+    models.length && `${models.length} 3D model${models.length > 1 ? "s" : ""}`,
+    videos.length && `${videos.length} video${videos.length > 1 ? "s" : ""}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   // Rows with no content show a placeholder in development and are omitted in production.
   const meta = [
     { label: "Category", value: project.category, hint: "" },
@@ -61,7 +72,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
             <div className="eyebrow mb-5">
               <span className="text-fg">{String(idx + 1).padStart(2, "0")}</span> <span className="mx-2 text-faint">/</span> {project.category}
             </div>
-            <h1 className="text-[clamp(2.6rem,7vw,6rem)] leading-[0.95] font-medium tracking-[-0.045em]">{project.title}</h1>
+            <h1 className="text-[clamp(2.4rem,5.6vw,5rem)] leading-[0.98] font-medium tracking-[-0.045em] text-balance">{project.title}</h1>
             <p className="mt-7 max-w-2xl text-[clamp(1.05rem,1.6vw,1.3rem)] leading-relaxed text-muted">{project.summary}</p>
           </div>
           <dl className="self-end border-t border-line md:col-span-4">
@@ -77,7 +88,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
 
       {project.images.length > 0 && (
         <section aria-label="Images" className="container-x">
-          <Gallery images={project.images} />
+          <CinematicReveal>
+            <Carousel images={project.images} label={project.title} priority stageClassName="aspect-[4/3] md:aspect-[16/10]" />
+          </CinematicReveal>
         </section>
       )}
 
@@ -125,7 +138,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
       )}
 
       {models.length > 0 && (
-        <section aria-labelledby="project-model" className="border-t border-line bg-graphite py-20 md:py-28">
+        <section aria-labelledby="project-model" className="band border-y border-line py-20 md:py-28">
           <div className="container-x">
             <Reveal className="mb-10 flex items-end justify-between gap-6">
               <h2 id="project-model" className="text-[clamp(1.6rem,3vw,2.4rem)] font-medium tracking-[-0.03em]">
@@ -133,8 +146,23 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
               </h2>
               <span className="eyebrow hidden sm:block">Original STL · rendered live</span>
             </Reveal>
-            <LazyViewer models={models} variant="embed" />
+            <CinematicReveal>
+              <LazyViewer models={models} variant="embed" />
+            </CinematicReveal>
           </div>
+        </section>
+      )}
+
+      {videos.length > 0 && (
+        <section aria-labelledby="project-video" className="container-x py-20 md:py-28">
+          <Reveal className="mb-10">
+            <h2 id="project-video" className="text-[clamp(1.6rem,3vw,2.4rem)] font-medium tracking-[-0.03em]">
+              In motion
+            </h2>
+          </Reveal>
+          <CinematicReveal>
+            <VideoPlayer videos={videos} compact />
+          </CinematicReveal>
         </section>
       )}
 

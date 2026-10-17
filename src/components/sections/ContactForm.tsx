@@ -35,7 +35,7 @@ export function ContactForm({ enabled, fallbackEmail }: { enabled: boolean; fall
           )}
         </p>
         {showPlaceholders && (
-          <p className="mt-4 font-mono text-[11px] text-amber-200/80">
+          <p className="mt-4 font-mono text-[11px] text-amber-200/80 light:text-amber-800">
             [Placeholder] Set RESEND_API_KEY and CONTACT_TO_EMAIL (see README → Contact form) to enable real delivery.
           </p>
         )}
@@ -111,7 +111,7 @@ export function ContactForm({ enabled, fallbackEmail }: { enabled: boolean; fall
             </>
           )}
         </button>
-        <p role="status" aria-live="polite" className="text-[13px] text-red-300/90">
+        <p role="status" aria-live="polite" className="text-[13px] text-red-300/90 light:text-red-700">
           {status.kind === "error" && status.message}
         </p>
       </div>
@@ -138,7 +138,7 @@ function Field({
 }) {
   const id = `contact-${name}`;
   const cls = `peer w-full border-b bg-transparent py-3 text-[15px] text-fg outline-none transition-colors placeholder:text-faint focus:border-fg ${
-    error ? "border-red-400/70" : "border-line-strong"
+    error ? "border-red-400/70 light:border-red-600/70" : "border-line-strong"
   }`;
   return (
     <div className={className}>
@@ -151,7 +151,7 @@ function Field({
         <input id={id} name={name} type={type} autoComplete={autoComplete} className={cls} aria-invalid={!!error} aria-describedby={error ? `${id}-err` : undefined} maxLength={200} />
       )}
       {error && (
-        <p id={`${id}-err`} className="mt-2 text-[12px] text-red-300/90">
+        <p id={`${id}-err`} className="mt-2 text-[12px] text-red-300/90 light:text-red-700">
           {error}
         </p>
       )}

@@ -39,7 +39,7 @@ export function Process() {
 
   return (
     <section aria-labelledby="process-title" className="container-x py-24 md:py-36">
-      <SectionHeading index="05" eyebrow="Design Process" title={<span id="process-title">From brief to finished design.</span>}>
+      <SectionHeading index="06" eyebrow="Design Process" title={<span id="process-title">From brief to finished design.</span>}>
         How I approach a design task. Not every project passes through every stage — validation, for example, depends on
         what the design needs.
       </SectionHeading>

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useScroll, useSpring } from "motion/react";
 import { useEffect, useState } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { navItems, site } from "@/content/site";
 
 export function Nav() {
@@ -12,6 +13,8 @@ export function Nav() {
   const [active, setActive] = useState<string>("home");
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 200, damping: 40, restDelta: 0.001 });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -52,6 +55,7 @@ export function Nav() {
         scrolled || open ? "border-b border-line bg-ink/75 backdrop-blur-xl" : "border-b border-transparent"
       }`}
     >
+      <motion.div aria-hidden style={{ scaleX: progress }} className="absolute inset-x-0 bottom-0 h-px origin-left bg-silver/70" />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:bg-fg focus:px-3 focus:py-2 focus:text-ink"
@@ -92,6 +96,8 @@ export function Nav() {
           })}
         </ul>
 
+        <div className="flex items-center gap-2 lg:ml-3">
+        <ThemeToggle />
         <button
           type="button"
           className="relative -mr-2 flex h-10 w-10 items-center justify-center lg:hidden"
@@ -103,6 +109,7 @@ export function Nav() {
           <span className={`absolute h-px w-5 bg-fg transition-transform duration-300 ${open ? "rotate-45" : "-translate-y-[4px]"}`} />
           <span className={`absolute h-px w-5 bg-fg transition-transform duration-300 ${open ? "-rotate-45" : "translate-y-[4px]"}`} />
         </button>
+        </div>
       </nav>
 
       <AnimatePresence>
